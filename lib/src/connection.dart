@@ -303,6 +303,16 @@ class Notification {
   final String payload;
 }
 
+class PostgreSQLResults {
+
+  PostgreSQLResults(this.rows, this.fieldDescriptions);
+
+  final List<List<dynamic>> rows;
+
+  final List<FieldDescription> fieldDescriptions;
+
+}
+
 abstract class _PostgreSQLExecutionContextMixin implements PostgreSQLExecutionContext {
   Map<int, String> _tableOIDNameMap = {};
   QueryQueue _queue = new QueryQueue();
@@ -343,6 +353,23 @@ abstract class _PostgreSQLExecutionContextMixin implements PostgreSQLExecutionCo
     final rows = await _enqueue(query, timeoutInSeconds: timeoutInSeconds);
 
     return _mapifyRows(rows, query.fieldDescriptions);
+  }
+
+  Future<PostgreSQLResults> resultsQuery(String fmtString,
+      {Map<String, dynamic> substitutionValues: null, bool allowReuse: true, int timeoutInSeconds}) async {
+    timeoutInSeconds ??= _connection.queryTimeoutInSeconds;
+    if (_connection.isClosed) {
+      throw new PostgreSQLException("Attempting to execute query, but connection is not open.");
+    }
+
+    var query = new Query<List<List<dynamic>>>(fmtString, substitutionValues, _connection, _transaction);
+    if (allowReuse) {
+      query.statementIdentifier = _connection._cache.identifierForQuery(query);
+    }
+
+    final rows = await _enqueue(query, timeoutInSeconds: timeoutInSeconds);
+
+    return PostgreSQLResults(rows, query.fieldDescriptions);
   }
 
   Future<int> execute(String fmtString, {Map<String, dynamic> substitutionValues: null, int timeoutInSeconds}) {
